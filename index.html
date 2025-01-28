@@ -16,9 +16,9 @@
             cookie_domain: 'auto',
             cookie_flags: 'SameSite=None;Secure',
             custom_map: {
-                'dimension1': 'user_type',
-                'dimension2': 'session_id',
-                'metric1': 'engagement_time'
+                'dimension1': 'user_type',    // User scope
+                'dimension2': 'event_session', // Event scope (renamed from session_ids)
+                'metric1': 'event_engagement' // Event scope
             }
         });
 
@@ -43,7 +43,7 @@
                     sessionId = now.toString();
                     gtag('event', 'session_start', {
                         user_type: isBot() ? 'bot' : 'real_user',
-                        session_id: sessionId,
+                        session_ids: sessionId,
                         non_interaction: false
                     });
                 }
@@ -53,7 +53,7 @@
                 // Track engagement with enhanced parameters
                 gtag('event', 'user_engagement', {
                     engagement_time_msec: Math.min(timeSinceLastActivity, SESSION_TIMEOUT),
-                    session_id: sessionId,
+                    session_ids: sessionId,
                     user_type: isBot() ? 'bot' : 'real_user',
                     non_interaction: false,
                     send_to: 'G-YLRKCN2672'
@@ -77,7 +77,7 @@
                 event_label: eventData.label || '',
                 value: eventData.value || 1,
                 user_type: isBot() ? 'bot' : 'real_user',
-                session_id: sessionId,
+                session_ids: sessionId,
                 engagement_time_msec: Date.now() - lastActivity,
                 non_interaction: false,
                 send_to: 'G-YLRKCN2672'
@@ -99,7 +99,7 @@
             page_title: document.title,
             page_location: window.location.href,
             user_type: isBot() ? 'bot' : 'real_user',
-            session_id: sessionId,
+            session_ids: sessionId,
             non_interaction: false,
             send_to: 'G-YLRKCN2672'
         });
