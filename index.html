@@ -9,12 +9,10 @@
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         
-        // Configure GA4 with session settings
+        // Basic GA4 configuration
         gtag('config', 'G-YLRKCN2672', {
-            'session_duration': 1800,  // 30 minutes in seconds
-            'custom_map': {
-                'dimension1': 'user_type'
-            }
+            send_page_view: false, // Disable automatic page views
+            debug_mode: true // Enable debug mode to see detailed logging
         });
 
         // Bot detection
@@ -22,65 +20,101 @@
             return /bot|googlebot|crawler|spider|robot|crawling/i.test(navigator.userAgent);
         }
 
-        // Set persistent user property
-        gtag('set', 'user_properties', {
-            'user_type': isBot() ? 'bot' : 'real_user'
-        });
+        // Initialize session data
+        function initSession() {
+            // Send first_visit event if this is user's first visit
+            if (!sessionStorage.getItem('ga_initialized')) {
+                gtag('event', 'first_visit', {
+                    event_category: 'user',
+                    user_type: isBot() ? 'bot' : 'real_user'
+                });
+                sessionStorage.setItem('ga_initialized', 'true');
+            }
 
-        // Custom event tracking function with session handling
+            // Send session_start event
+            gtag('event', 'session_start', {
+                event_category: 'session',
+                user_type: isBot() ? 'bot' : 'real_user'
+            });
+        }
+
+        // Enhanced event tracking
         function trackEvent(action, category, label) {
-            console.log('Sending event:', action, {
-                event_category: category,
-                event_label: label,
-                user_type: isBot() ? 'bot' : 'real_user',
-                non_interaction: false  // Ensures event affects session duration
+            // Log the event for debugging
+            console.log('Tracking event:', {
+                action: action,
+                category: category,
+                label: label,
+                user_type: isBot() ? 'bot' : 'real_user'
             });
 
+            // Send the event to GA4
             gtag('event', action, {
                 event_category: category,
                 event_label: label,
                 user_type: isBot() ? 'bot' : 'real_user',
-                non_interaction: false
+                engagement_time_msec: 100, // Ensure engagement tracking
+                session_id: sessionStorage.getItem('ga_session_id')
             });
         }
 
-        // Track initial page view with session data
-        gtag('event', 'page_view', {
-            user_type: isBot() ? 'bot' : 'real_user',
-            page_title: document.title,
-            page_location: window.location.href,
-            non_interaction: false
+        // Track page views with enhanced data
+        function trackPageView() {
+            gtag('event', 'page_view', {
+                page_title: document.title,
+                page_location: window.location.href,
+                user_type: isBot() ? 'bot' : 'real_user',
+                engagement_time_msec: 100
+            });
+        }
+
+        // Session and engagement tracking
+        let lastActivityTime = Date.now();
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                trackEvent('user_active', 'engagement', 'Page Visible');
+                lastActivityTime = Date.now();
+            }
         });
 
-        // Periodic activity tracking to maintain session
+        // Track user engagement every minute if page is visible
         setInterval(function() {
             if (document.visibilityState === 'visible') {
-                gtag('event', 'active_check', {
-                    user_type: isBot() ? 'bot' : 'real_user',
-                    non_interaction: true
+                const timeSpent = Date.now() - lastActivityTime;
+                gtag('event', 'user_engagement', {
+                    engagement_time_msec: timeSpent,
+                    user_type: isBot() ? 'bot' : 'real_user'
                 });
+                lastActivityTime = Date.now();
             }
-        }, 60000);  // Check every minute
+        }, 60000);
 
-        console.log('Analytics initialized with user_type:', isBot() ? 'bot' : 'real_user');
+        // Initialize tracking
+        initSession();
+        trackPageView();
     </script>
 </head>
 <body style="margin:0; padding:0;">
     <iframe id="geeApp" style="width:100%; height:100vh; border:none;"></iframe>
 
     <script>
-        // Function to handle messages from the GEE app
+        // Handle messages from GEE app
         window.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'analytics') {
                 trackEvent(event.data.action, event.data.category, event.data.label);
             }
         });
 
-        // Load the GEE app and track the load
+        // Load GEE app with tracking
         window.onload = function() {
             trackEvent('app_load', 'system', 'GEE App Loaded');
             var iframe = document.getElementById('geeApp');
             iframe.src = 'https://our-axon-435300-d4.projects.earthengine.app/view/agroclimate-v1';
+            
+            // Track when iframe loads
+            iframe.onload = function() {
+                trackEvent('iframe_loaded', 'system', 'GEE Iframe Loaded');
+            };
         };
     </script>
 </body>
