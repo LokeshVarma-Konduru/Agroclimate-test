@@ -9,89 +9,88 @@
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         
-        // Basic GA4 configuration
+        // Configure GA4 with enhanced measurement
         gtag('config', 'G-YLRKCN2672', {
-            send_page_view: false, // Disable automatic page views
-            debug_mode: true // Enable debug mode to see detailed logging
+            debug_mode: true,
+            send_page_view: true,
+            cookie_domain: 'auto',
+            cookie_flags: 'SameSite=None;Secure'
         });
+
+        // Session management
+        const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+        let lastActivity = Date.now();
+        let sessionId = Date.now().toString();
 
         // Bot detection
         function isBot() {
             return /bot|googlebot|crawler|spider|robot|crawling/i.test(navigator.userAgent);
         }
 
-        // Initialize session data
-        function initSession() {
-            // Send first_visit event if this is user's first visit
-            if (!sessionStorage.getItem('ga_initialized')) {
-                gtag('event', 'first_visit', {
-                    event_category: 'user',
+        // Track user engagement
+        function updateEngagement() {
+            if (document.visibilityState === 'visible') {
+                const now = Date.now();
+                const timeSinceLastActivity = now - lastActivity;
+                
+                // If session expired, create new session
+                if (timeSinceLastActivity > SESSION_TIMEOUT) {
+                    sessionId = now.toString();
+                    gtag('event', 'session_start', {
+                        user_type: isBot() ? 'bot' : 'real_user',
+                        session_id: sessionId
+                    });
+                }
+                
+                lastActivity = now;
+                
+                // Track engagement
+                gtag('event', 'user_engagement', {
+                    engagement_time_msec: Math.min(timeSinceLastActivity, SESSION_TIMEOUT),
+                    session_id: sessionId,
                     user_type: isBot() ? 'bot' : 'real_user'
                 });
-                sessionStorage.setItem('ga_initialized', 'true');
             }
-
-            // Send session_start event
-            gtag('event', 'session_start', {
-                event_category: 'session',
-                user_type: isBot() ? 'bot' : 'real_user'
-            });
         }
 
         // Enhanced event tracking
-        function trackEvent(action, category, label) {
-            // Log the event for debugging
-            console.log('Tracking event:', {
-                action: action,
-                category: category,
-                label: label,
-                user_type: isBot() ? 'bot' : 'real_user'
-            });
-
-            // Send the event to GA4
-            gtag('event', action, {
-                event_category: category,
-                event_label: label,
-                user_type: isBot() ? 'bot' : 'real_user',
-                engagement_time_msec: 100, // Ensure engagement tracking
-                session_id: sessionStorage.getItem('ga_session_id')
-            });
-        }
-
-        // Track page views with enhanced data
-        function trackPageView() {
-            gtag('event', 'page_view', {
-                page_title: document.title,
-                page_location: window.location.href,
-                user_type: isBot() ? 'bot' : 'real_user',
-                engagement_time_msec: 100
-            });
-        }
-
-        // Session and engagement tracking
-        let lastActivityTime = Date.now();
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible') {
-                trackEvent('user_active', 'engagement', 'Page Visible');
-                lastActivityTime = Date.now();
+        function trackEvent(eventData) {
+            console.log('Tracking event:', eventData);
+            
+            // Ensure required fields
+            if (!eventData.action || !eventData.category) {
+                console.error('Missing required event fields');
+                return;
             }
-        });
 
-        // Track user engagement every minute if page is visible
-        setInterval(function() {
-            if (document.visibilityState === 'visible') {
-                const timeSpent = Date.now() - lastActivityTime;
-                gtag('event', 'user_engagement', {
-                    engagement_time_msec: timeSpent,
-                    user_type: isBot() ? 'bot' : 'real_user'
-                });
-                lastActivityTime = Date.now();
-            }
-        }, 60000);
+            // Build event parameters
+            const params = {
+                event_category: eventData.category,
+                event_label: eventData.label || '',
+                value: eventData.value || 1,
+                user_type: isBot() ? 'bot' : 'real_user',
+                session_id: sessionId,
+                engagement_time_msec: Date.now() - lastActivity
+            };
+
+            // Send to GA4
+            gtag('event', eventData.action, params);
+            
+            // Update activity timestamp
+            lastActivity = Date.now();
+        }
 
         // Initialize tracking
-        initSession();
-        trackPageView();
+        document.addEventListener('visibilitychange', updateEngagement);
+        setInterval(updateEngagement, 60000); // Check engagement every minute
+
+        // Track initial page load
+        gtag('event', 'page_view', {
+            page_title: document.title,
+            page_location: window.location.href,
+            user_type: isBot() ? 'bot' : 'real_user',
+            session_id: sessionId
+        });
     </script>
 </head>
 <body style="margin:0; padding:0;">
@@ -101,19 +100,23 @@
         // Handle messages from GEE app
         window.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'analytics') {
-                trackEvent(event.data.action, event.data.category, event.data.label);
+                // Track the event from GEE
+                trackEvent(event.data);
             }
         });
 
-        // Load GEE app with tracking
+        // Load GEE app
         window.onload = function() {
-            trackEvent('app_load', 'system', 'GEE App Loaded');
             var iframe = document.getElementById('geeApp');
             iframe.src = 'https://our-axon-435300-d4.projects.earthengine.app/view/agroclimate-v1';
             
-            // Track when iframe loads
+            // Track iframe load
             iframe.onload = function() {
-                trackEvent('iframe_loaded', 'system', 'GEE Iframe Loaded');
+                trackEvent({
+                    action: 'iframe_loaded',
+                    category: 'system',
+                    label: 'GEE App Loaded'
+                });
             };
         };
     </script>
