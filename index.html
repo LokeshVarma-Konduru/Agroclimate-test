@@ -41,6 +41,25 @@
             const uniqueUserId = result.visitorId; // This will be same across tabs for same browser
             console.log('Unique browser fingerprint:', uniqueUserId);
 
+            // Get user's location
+            async function getUserLocation() {
+                try {
+                    const response = await fetch('https://ipapi.co/json/');
+                    const locationData = await response.json();
+                    return {
+                        country: locationData.country_name,
+                        region: locationData.region,
+                        city: locationData.city,
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude,
+                        ip: locationData.ip
+                    };
+                } catch (error) {
+                    console.error('Error getting location:', error);
+                    return null;
+                }
+            }
+
             // Get today's date in YYYY-MM-DD format
             const today = new Date().toISOString().split('T')[0];
 
@@ -56,10 +75,12 @@
                     if (document.visibilityState === 'visible' && !isVisitActive) {
                         // Tab became visible - start visit
                         isVisitActive = true;
+                        const locationData = await getUserLocation();
                         await set(visitRef, {
                             userId: uniqueUserId,
                             timestamp: Date.now(),
-                            active: true
+                            active: true,
+                            location: locationData
                         });
                     } else if (document.visibilityState === 'hidden' && isVisitActive) {
                         // Tab hidden - end visit
@@ -73,11 +94,14 @@
 
             async function trackUserActivity() {
                 try {
+                    const locationData = await getUserLocation();
+                    
                     // Update unique user record
                     const userRef = ref(database, `unique-users/${today}/${uniqueUserId}`);
                     await set(userRef, {
                         lastSeen: Date.now(),
-                        visits: increment(1)
+                        visits: increment(1),
+                        location: locationData
                     });
 
                     // Start tracking this visit only if tab is visible
@@ -87,7 +111,8 @@
                         await set(visitRef, {
                             userId: uniqueUserId,
                             timestamp: Date.now(),
-                            active: true
+                            active: true,
+                            location: locationData
                         });
                     }
 
@@ -103,22 +128,36 @@
                         }
                     });
 
-                    // Listen for unique users count
+                    // Listen for unique users count and update display with location info
                     onValue(ref(database, `unique-users/${today}`), (snapshot) => {
                         const data = snapshot.val();
                         const uniqueCount = data ? Object.keys(data).length : 0;
                         console.log(`Unique users today: ${uniqueCount}`);
                         
+                        // Group users by country
+                        const usersByCountry = {};
+                        if (data) {
+                            Object.values(data).forEach(user => {
+                                if (user.location && user.location.country) {
+                                    usersByCountry[user.location.country] = (usersByCountry[user.location.country] || 0) + 1;
+                                }
+                            });
+                        }
+                        
                         // Update analytics
                         analytics.logEvent('unique_users', {
                             date: today,
-                            count: uniqueCount
+                            count: uniqueCount,
+                            countries: usersByCountry
                         });
 
                         // Update counter display if it exists
                         const counterEl = document.getElementById('userCounter');
                         if (counterEl) {
-                            counterEl.textContent = `Unique Users: ${uniqueCount}`;
+                            const countryList = Object.entries(usersByCountry)
+                                .map(([country, count]) => `${country}: ${count}`)
+                                .join(', ');
+                            counterEl.textContent = `Unique Users: ${uniqueCount} (${countryList})`;
                         }
                     });
 
@@ -126,18 +165,33 @@
                     onValue(ref(database, `visits/${today}`), (snapshot) => {
                         const data = snapshot.val();
                         const activeVisits = data ? Object.keys(data).length : 0;
+                        
+                        // Group visits by country
+                        const visitsByCountry = {};
+                        if (data) {
+                            Object.values(data).forEach(visit => {
+                                if (visit.location && visit.location.country) {
+                                    visitsByCountry[visit.location.country] = (visitsByCountry[visit.location.country] || 0) + 1;
+                                }
+                            });
+                        }
+
                         console.log(`Active visits: ${activeVisits}`);
                         
                         // Update analytics
                         analytics.logEvent('active_visits', {
                             date: today,
-                            count: activeVisits
+                            count: activeVisits,
+                            countries: visitsByCountry
                         });
 
                         // Update counter display if it exists
                         const visitCounterEl = document.getElementById('visitCounter');
                         if (visitCounterEl) {
-                            visitCounterEl.textContent = `Active Visits: ${activeVisits}`;
+                            const countryList = Object.entries(visitsByCountry)
+                                .map(([country, count]) => `${country}: ${count}`)
+                                .join(', ');
+                            visitCounterEl.textContent = `Active Visits: ${activeVisits} (${countryList})`;
                         }
                     });
 
