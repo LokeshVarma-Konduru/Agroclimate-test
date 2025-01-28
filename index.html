@@ -8,6 +8,7 @@
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
+        import { getDatabase, ref, set, onValue, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -17,17 +18,69 @@
             storageBucket: "agroclimate-analytics.firebasestorage.app",
             messagingSenderId: "38181017178",
             appId: "1:38181017178:web:581278e2d21d39873e7c4",
-            measurementId: "G-DRVWFWG1B3"
+            measurementId: "G-DRVWFWG1B3",
+            databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com"
         };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
+        const database = getDatabase(app);
+
+        // Generate a unique user ID for this session
+        const userId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
+
+        // Track daily unique users
+        async function trackDailyUser() {
+            const dailyUsersRef = ref(database, `daily-users/${today}`);
+            const userRef = ref(database, `daily-users/${today}/users/${userId}`);
+            
+            // Mark this user as active today
+            await set(userRef, true);
+
+            // Listen for total users count
+            onValue(dailyUsersRef, (snapshot) => {
+                const data = snapshot.val();
+                const totalUsers = data?.users ? Object.keys(data.users).length : 0;
+                console.log(`Total users today: ${totalUsers}`);
+                
+                // Log the daily total users event
+                analytics.logEvent('daily_total_users', {
+                    date: today,
+                    total_users: totalUsers
+                });
+            });
+        }
+
+        // Track real-time active users
+        let activeUsers = new Set();
+        
+        function updateActiveUsers() {
+            const activeUsersRef = ref(database, 'active-users');
+            
+            // Add this user
+            activeUsers.add(userId);
+            set(activeUsersRef, Array.from(activeUsers));
+            
+            // Remove user when they leave
+            window.addEventListener('beforeunload', () => {
+                activeUsers.delete(userId);
+                set(activeUsersRef, Array.from(activeUsers));
+            });
+        }
+
+        // Initialize tracking
+        trackDailyUser();
+        updateActiveUsers();
 
         // Track page views
         analytics.logEvent('page_view', {
             page_title: document.title,
-            page_location: window.location.href
+            page_location: window.location.href,
+            user_id: userId
         });
 
         // Track user engagement
@@ -38,7 +91,8 @@
             const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
             analytics.logEvent('user_engagement', {
                 engagement_time: sessionDuration,
-                type: 'user'
+                type: 'user',
+                user_id: userId
             });
         }, 60000); // Log every minute
 
@@ -48,7 +102,8 @@
                 analytics.logEvent('gee_interaction', {
                     action: event.data.action,
                     category: event.data.category,
-                    label: event.data.label || ''
+                    label: event.data.label || '',
+                    user_id: userId
                 });
             }
         });
