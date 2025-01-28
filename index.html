@@ -2,15 +2,22 @@
 <html>
 <head>
     <title>Agroclimate Viewer & Planner App</title>
+
+    <!-- Add FingerprintJS for unique user identification -->
+    <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js" 
+        onerror="console.error('Failed to load FingerprintJS')"></script>
     
     <!-- Firebase SDK -->
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
-        import { getDatabase, ref, set, onValue, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+        import { getDatabase, ref, set, onValue, increment, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
         try {
+            // Initialize FingerprintJS for unique user identification
+            const fpPromise = FingerprintJS.load();
+
             // Your web app's Firebase configuration
             const firebaseConfig = {
                 apiKey: "AIzaSyAIo80sL0dRdsI7wnBqWjG4s9gCM6eX6s8",
@@ -23,114 +30,101 @@
                 databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com"
             };
 
-            console.log('Initializing Firebase with config:', firebaseConfig);
-
             // Initialize Firebase
             const app = initializeApp(firebaseConfig);
-            console.log('Firebase app initialized');
-
             const database = getDatabase(app);
-            console.log('Database initialized');
-
             const analytics = getAnalytics(app);
-            console.log('Analytics initialized');
 
-            // Generate a unique user ID for this session
-            const userId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-            console.log('Generated userId:', userId);
-            
+            // Get browser fingerprint and initialize tracking
+            const fp = await fpPromise;
+            const result = await fp.get();
+            const uniqueUserId = result.visitorId; // This will be same across tabs for same browser
+            console.log('Unique browser fingerprint:', uniqueUserId);
+
             // Get today's date in YYYY-MM-DD format
             const today = new Date().toISOString().split('T')[0];
-            console.log('Today\'s date:', today);
 
-            // Track daily unique users
-            async function trackDailyUser() {
+            // Current visit ID
+            const currentVisitId = Date.now().toString(36);
+
+            async function trackUserActivity() {
                 try {
-                    console.log('Starting trackDailyUser function');
-                    const dailyUsersRef = ref(database, `daily-users/${today}`);
-                    const userRef = ref(database, `daily-users/${today}/users/${userId}`);
-                    
-                    console.log('Writing user data to path:', `daily-users/${today}/users/${userId}`);
-                    // Mark this user as active today
+                    // Update unique user record
+                    const userRef = ref(database, `unique-users/${today}/${uniqueUserId}`);
                     await set(userRef, {
+                        lastSeen: Date.now(),
+                        visits: increment(1)
+                    });
+
+                    // Track this visit
+                    const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
+                    await set(visitRef, {
+                        userId: uniqueUserId,
                         timestamp: Date.now(),
                         active: true
                     });
-                    console.log('Successfully wrote user data');
 
-                    // Listen for total users count
-                    onValue(dailyUsersRef, (snapshot) => {
-                        console.log('Received database update');
-                        const data = snapshot.val();
-                        console.log('Database data:', data);
-                        const totalUsers = data?.users ? Object.keys(data.users).length : 0;
-                        console.log(`Total users today: ${totalUsers}`);
-                        
-                        // Log the daily total users event
-                        analytics.logEvent('daily_total_users', {
-                            date: today,
-                            total_users: totalUsers
-                        });
-                    }, (error) => {
-                        console.error('Database read error:', error);
-                    });
-                } catch (error) {
-                    console.error('Error in trackDailyUser:', error);
-                }
-            }
-
-            // Track real-time active users
-            async function updateActiveUsers() {
-                try {
-                    console.log('Starting updateActiveUsers function');
-                    const activeUsersRef = ref(database, 'active-users');
-                    
-                    // Add this user
-                    console.log('Adding user to active users');
-                    await set(ref(database, `active-users/${userId}`), {
-                        timestamp: Date.now(),
-                        active: true
-                    });
-                    console.log('Successfully added user to active users');
-                    
-                    // Remove user when they leave
+                    // Cleanup visit when user leaves
                     window.addEventListener('beforeunload', async () => {
                         try {
-                            console.log('Removing user from active users');
-                            await set(ref(database, `active-users/${userId}`), null);
-                            console.log('Successfully removed user from active users');
+                            await remove(visitRef);
                         } catch (error) {
-                            console.error('Error removing user:', error);
+                            console.error('Error cleaning up visit:', error);
                         }
                     });
 
-                    // Listen for active users count
-                    onValue(activeUsersRef, (snapshot) => {
-                        console.log('Received active users update');
+                    // Listen for unique users count
+                    onValue(ref(database, `unique-users/${today}`), (snapshot) => {
                         const data = snapshot.val();
-                        console.log('Active users data:', data);
-                        const activeCount = data ? Object.keys(data).length : 0;
-                        console.log(`Current active users: ${activeCount}`);
-                    }, (error) => {
-                        console.error('Active users read error:', error);
+                        const uniqueCount = data ? Object.keys(data).length : 0;
+                        console.log(`Unique users today: ${uniqueCount}`);
+                        
+                        // Update analytics
+                        analytics.logEvent('unique_users', {
+                            date: today,
+                            count: uniqueCount
+                        });
+
+                        // Update counter display if it exists
+                        const counterEl = document.getElementById('userCounter');
+                        if (counterEl) {
+                            counterEl.textContent = `Unique Users: ${uniqueCount}`;
+                        }
                     });
+
+                    // Listen for total visits
+                    onValue(ref(database, `visits/${today}`), (snapshot) => {
+                        const data = snapshot.val();
+                        const visitCount = data ? Object.keys(data).length : 0;
+                        console.log(`Total visits today: ${visitCount}`);
+                        
+                        // Update analytics
+                        analytics.logEvent('total_visits', {
+                            date: today,
+                            count: visitCount
+                        });
+
+                        // Update counter display if it exists
+                        const visitCounterEl = document.getElementById('visitCounter');
+                        if (visitCounterEl) {
+                            visitCounterEl.textContent = `Active Visits: ${visitCount}`;
+                        }
+                    });
+
                 } catch (error) {
-                    console.error('Error in updateActiveUsers:', error);
+                    console.error('Error tracking user activity:', error);
                 }
             }
 
             // Initialize tracking
-            console.log('Starting tracking initialization');
-            trackDailyUser().catch(error => console.error('Error initializing daily tracking:', error));
-            updateActiveUsers().catch(error => console.error('Error initializing active users:', error));
+            trackUserActivity().catch(error => console.error('Error initializing tracking:', error));
 
             // Track page views
             analytics.logEvent('page_view', {
                 page_title: document.title,
                 page_location: window.location.href,
-                user_id: userId
+                user_id: uniqueUserId
             });
-            console.log('Logged page view event');
 
             // Track user engagement
             let sessionStartTime = Date.now();
@@ -141,9 +135,8 @@
                 analytics.logEvent('user_engagement', {
                     engagement_time: sessionDuration,
                     type: 'user',
-                    user_id: userId
+                    user_id: uniqueUserId
                 });
-                console.log('Logged engagement event, duration:', sessionDuration);
             }, 60000); // Log every minute
 
             // Track GEE app interactions
@@ -153,9 +146,8 @@
                         action: event.data.action,
                         category: event.data.category,
                         label: event.data.label || '',
-                        user_id: userId
+                        user_id: uniqueUserId
                     });
-                    console.log('Logged GEE interaction event:', event.data);
                 }
             });
 
