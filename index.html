@@ -10,103 +10,158 @@
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
         import { getDatabase, ref, set, onValue, increment } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyAIo80sL0dRdsI7wnBqWjG4s9gCM6eX6s8",
-            authDomain: "agroclimate-analytics.firebaseapp.com",
-            projectId: "agroclimate-analytics",
-            storageBucket: "agroclimate-analytics.firebasestorage.app",
-            messagingSenderId: "38181017178",
-            appId: "1:38181017178:web:581278e2d21d39873e7c4",
-            measurementId: "G-DRVWFWG1B3",
-            databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com"
-        };
+        try {
+            // Your web app's Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyAIo80sL0dRdsI7wnBqWjG4s9gCM6eX6s8",
+                authDomain: "agroclimate-analytics.firebaseapp.com",
+                projectId: "agroclimate-analytics",
+                storageBucket: "agroclimate-analytics.firebasestorage.app",
+                messagingSenderId: "38181017178",
+                appId: "1:38181017178:web:581278e2d21d39873e7c4",
+                measurementId: "G-DRVWFWG1B3",
+                databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com"
+            };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
-        const database = getDatabase(app);
+            console.log('Initializing Firebase with config:', firebaseConfig);
 
-        // Generate a unique user ID for this session
-        const userId = Date.now().toString(36) + Math.random().toString(36).substr(2);
-        
-        // Get today's date in YYYY-MM-DD format
-        const today = new Date().toISOString().split('T')[0];
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            console.log('Firebase app initialized');
 
-        // Track daily unique users
-        async function trackDailyUser() {
-            const dailyUsersRef = ref(database, `daily-users/${today}`);
-            const userRef = ref(database, `daily-users/${today}/users/${userId}`);
+            const database = getDatabase(app);
+            console.log('Database initialized');
+
+            const analytics = getAnalytics(app);
+            console.log('Analytics initialized');
+
+            // Generate a unique user ID for this session
+            const userId = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            console.log('Generated userId:', userId);
             
-            // Mark this user as active today
-            await set(userRef, true);
+            // Get today's date in YYYY-MM-DD format
+            const today = new Date().toISOString().split('T')[0];
+            console.log('Today\'s date:', today);
 
-            // Listen for total users count
-            onValue(dailyUsersRef, (snapshot) => {
-                const data = snapshot.val();
-                const totalUsers = data?.users ? Object.keys(data.users).length : 0;
-                console.log(`Total users today: ${totalUsers}`);
-                
-                // Log the daily total users event
-                analytics.logEvent('daily_total_users', {
-                    date: today,
-                    total_users: totalUsers
-                });
-            });
-        }
+            // Track daily unique users
+            async function trackDailyUser() {
+                try {
+                    console.log('Starting trackDailyUser function');
+                    const dailyUsersRef = ref(database, `daily-users/${today}`);
+                    const userRef = ref(database, `daily-users/${today}/users/${userId}`);
+                    
+                    console.log('Writing user data to path:', `daily-users/${today}/users/${userId}`);
+                    // Mark this user as active today
+                    await set(userRef, {
+                        timestamp: Date.now(),
+                        active: true
+                    });
+                    console.log('Successfully wrote user data');
 
-        // Track real-time active users
-        let activeUsers = new Set();
-        
-        function updateActiveUsers() {
-            const activeUsersRef = ref(database, 'active-users');
-            
-            // Add this user
-            activeUsers.add(userId);
-            set(activeUsersRef, Array.from(activeUsers));
-            
-            // Remove user when they leave
-            window.addEventListener('beforeunload', () => {
-                activeUsers.delete(userId);
-                set(activeUsersRef, Array.from(activeUsers));
-            });
-        }
+                    // Listen for total users count
+                    onValue(dailyUsersRef, (snapshot) => {
+                        console.log('Received database update');
+                        const data = snapshot.val();
+                        console.log('Database data:', data);
+                        const totalUsers = data?.users ? Object.keys(data.users).length : 0;
+                        console.log(`Total users today: ${totalUsers}`);
+                        
+                        // Log the daily total users event
+                        analytics.logEvent('daily_total_users', {
+                            date: today,
+                            total_users: totalUsers
+                        });
+                    }, (error) => {
+                        console.error('Database read error:', error);
+                    });
+                } catch (error) {
+                    console.error('Error in trackDailyUser:', error);
+                }
+            }
 
-        // Initialize tracking
-        trackDailyUser();
-        updateActiveUsers();
+            // Track real-time active users
+            async function updateActiveUsers() {
+                try {
+                    console.log('Starting updateActiveUsers function');
+                    const activeUsersRef = ref(database, 'active-users');
+                    
+                    // Add this user
+                    console.log('Adding user to active users');
+                    await set(ref(database, `active-users/${userId}`), {
+                        timestamp: Date.now(),
+                        active: true
+                    });
+                    console.log('Successfully added user to active users');
+                    
+                    // Remove user when they leave
+                    window.addEventListener('beforeunload', async () => {
+                        try {
+                            console.log('Removing user from active users');
+                            await set(ref(database, `active-users/${userId}`), null);
+                            console.log('Successfully removed user from active users');
+                        } catch (error) {
+                            console.error('Error removing user:', error);
+                        }
+                    });
 
-        // Track page views
-        analytics.logEvent('page_view', {
-            page_title: document.title,
-            page_location: window.location.href,
-            user_id: userId
-        });
+                    // Listen for active users count
+                    onValue(activeUsersRef, (snapshot) => {
+                        console.log('Received active users update');
+                        const data = snapshot.val();
+                        console.log('Active users data:', data);
+                        const activeCount = data ? Object.keys(data).length : 0;
+                        console.log(`Current active users: ${activeCount}`);
+                    }, (error) => {
+                        console.error('Active users read error:', error);
+                    });
+                } catch (error) {
+                    console.error('Error in updateActiveUsers:', error);
+                }
+            }
 
-        // Track user engagement
-        let sessionStartTime = Date.now();
-        
-        // Track session duration
-        setInterval(() => {
-            const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
-            analytics.logEvent('user_engagement', {
-                engagement_time: sessionDuration,
-                type: 'user',
+            // Initialize tracking
+            console.log('Starting tracking initialization');
+            trackDailyUser().catch(error => console.error('Error initializing daily tracking:', error));
+            updateActiveUsers().catch(error => console.error('Error initializing active users:', error));
+
+            // Track page views
+            analytics.logEvent('page_view', {
+                page_title: document.title,
+                page_location: window.location.href,
                 user_id: userId
             });
-        }, 60000); // Log every minute
+            console.log('Logged page view event');
 
-        // Track GEE app interactions
-        window.addEventListener('message', function(event) {
-            if (event.data && event.data.type === 'analytics') {
-                analytics.logEvent('gee_interaction', {
-                    action: event.data.action,
-                    category: event.data.category,
-                    label: event.data.label || '',
+            // Track user engagement
+            let sessionStartTime = Date.now();
+            
+            // Track session duration
+            setInterval(() => {
+                const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
+                analytics.logEvent('user_engagement', {
+                    engagement_time: sessionDuration,
+                    type: 'user',
                     user_id: userId
                 });
-            }
-        });
+                console.log('Logged engagement event, duration:', sessionDuration);
+            }, 60000); // Log every minute
+
+            // Track GEE app interactions
+            window.addEventListener('message', function(event) {
+                if (event.data && event.data.type === 'analytics') {
+                    analytics.logEvent('gee_interaction', {
+                        action: event.data.action,
+                        category: event.data.category,
+                        label: event.data.label || '',
+                        user_id: userId
+                    });
+                    console.log('Logged GEE interaction event:', event.data);
+                }
+            });
+
+        } catch (error) {
+            console.error('Firebase initialization error:', error);
+        }
     </script>
 
     <!-- Google Analytics -->
