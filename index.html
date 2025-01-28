@@ -9,12 +9,17 @@
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         
-        // Configure GA4 with enhanced measurement
+        // Configure GA4 with enhanced measurement and historical data collection
         gtag('config', 'G-YLRKCN2672', {
-            debug_mode: true,
+            debug_mode: false, // Disable debug mode in production
             send_page_view: true,
             cookie_domain: 'auto',
-            cookie_flags: 'SameSite=None;Secure'
+            cookie_flags: 'SameSite=None;Secure',
+            custom_map: {
+                'dimension1': 'user_type',
+                'dimension2': 'session_id',
+                'metric1': 'engagement_time'
+            }
         });
 
         // Session management
@@ -27,7 +32,7 @@
             return /bot|googlebot|crawler|spider|robot|crawling/i.test(navigator.userAgent);
         }
 
-        // Track user engagement
+        // Track user engagement with enhanced data retention
         function updateEngagement() {
             if (document.visibilityState === 'visible') {
                 const now = Date.now();
@@ -38,22 +43,25 @@
                     sessionId = now.toString();
                     gtag('event', 'session_start', {
                         user_type: isBot() ? 'bot' : 'real_user',
-                        session_id: sessionId
+                        session_id: sessionId,
+                        non_interaction: false
                     });
                 }
                 
                 lastActivity = now;
                 
-                // Track engagement
+                // Track engagement with enhanced parameters
                 gtag('event', 'user_engagement', {
                     engagement_time_msec: Math.min(timeSinceLastActivity, SESSION_TIMEOUT),
                     session_id: sessionId,
-                    user_type: isBot() ? 'bot' : 'real_user'
+                    user_type: isBot() ? 'bot' : 'real_user',
+                    non_interaction: false,
+                    send_to: 'G-YLRKCN2672'
                 });
             }
         }
 
-        // Enhanced event tracking
+        // Enhanced event tracking with improved data retention
         function trackEvent(eventData) {
             console.log('Tracking event:', eventData);
             
@@ -63,17 +71,19 @@
                 return;
             }
 
-            // Build event parameters
+            // Build event parameters with enhanced tracking
             const params = {
                 event_category: eventData.category,
                 event_label: eventData.label || '',
                 value: eventData.value || 1,
                 user_type: isBot() ? 'bot' : 'real_user',
                 session_id: sessionId,
-                engagement_time_msec: Date.now() - lastActivity
+                engagement_time_msec: Date.now() - lastActivity,
+                non_interaction: false,
+                send_to: 'G-YLRKCN2672'
             };
 
-            // Send to GA4
+            // Send to GA4 with improved data collection
             gtag('event', eventData.action, params);
             
             // Update activity timestamp
@@ -84,12 +94,14 @@
         document.addEventListener('visibilitychange', updateEngagement);
         setInterval(updateEngagement, 60000); // Check engagement every minute
 
-        // Track initial page load
+        // Track initial page load with enhanced parameters
         gtag('event', 'page_view', {
             page_title: document.title,
             page_location: window.location.href,
             user_type: isBot() ? 'bot' : 'real_user',
-            session_id: sessionId
+            session_id: sessionId,
+            non_interaction: false,
+            send_to: 'G-YLRKCN2672'
         });
     </script>
 </head>
@@ -97,10 +109,10 @@
     <iframe id="geeApp" style="width:100%; height:100vh; border:none;"></iframe>
 
     <script>
-        // Handle messages from GEE app
+        // Handle messages from GEE app with improved tracking
         window.addEventListener('message', function(event) {
             if (event.data && event.data.type === 'analytics') {
-                // Track the event from GEE
+                // Track the event from GEE with enhanced parameters
                 trackEvent(event.data);
             }
         });
@@ -110,12 +122,13 @@
             var iframe = document.getElementById('geeApp');
             iframe.src = 'https://our-axon-435300-d4.projects.earthengine.app/view/agroclimate-v1';
             
-            // Track iframe load
+            // Track iframe load with enhanced parameters
             iframe.onload = function() {
                 trackEvent({
                     action: 'iframe_loaded',
                     category: 'system',
-                    label: 'GEE App Loaded'
+                    label: 'GEE App Loaded',
+                    non_interaction: false
                 });
             };
         };
