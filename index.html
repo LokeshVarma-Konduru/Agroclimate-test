@@ -44,19 +44,37 @@
             // Get user's location
             async function getUserLocation() {
                 try {
-                    const response = await fetch('https://ipapi.co/json/');
-                    const locationData = await response.json();
-                    return {
+                    console.log('Fetching location data...');
+                    const response = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await response.json();
+                    console.log('IP:', ipData.ip);
+                    
+                    const geoResponse = await fetch(`https://ipapi.co/${ipData.ip}/json/`);
+                    const locationData = await geoResponse.json();
+                    console.log('Location data:', locationData);
+                    
+                    if (locationData.error) {
+                        throw new Error('Location API error: ' + locationData.reason);
+                    }
+                    
+                    const location = {
                         country: locationData.country_name,
                         region: locationData.region,
                         city: locationData.city,
                         latitude: locationData.latitude,
                         longitude: locationData.longitude,
-                        ip: locationData.ip
+                        ip: ipData.ip
                     };
+                    console.log('Processed location:', location);
+                    return location;
                 } catch (error) {
                     console.error('Error getting location:', error);
-                    return null;
+                    return {
+                        country: 'Unknown',
+                        region: 'Unknown',
+                        city: 'Unknown',
+                        ip: 'Unknown'
+                    };
                 }
             }
 
@@ -76,11 +94,12 @@
                         // Tab became visible - start visit
                         isVisitActive = true;
                         const locationData = await getUserLocation();
+                        console.log('Setting visit with location:', locationData);
                         await set(visitRef, {
                             userId: uniqueUserId,
                             timestamp: Date.now(),
                             active: true,
-                            location: locationData
+                            location: locationData || null
                         });
                     } else if (document.visibilityState === 'hidden' && isVisitActive) {
                         // Tab hidden - end visit
@@ -94,25 +113,29 @@
 
             async function trackUserActivity() {
                 try {
+                    console.log('Getting location for user activity...');
                     const locationData = await getUserLocation();
+                    console.log('Got location for user:', locationData);
                     
                     // Update unique user record
                     const userRef = ref(database, `unique-users/${today}/${uniqueUserId}`);
+                    console.log('Updating user with location:', locationData);
                     await set(userRef, {
                         lastSeen: Date.now(),
                         visits: increment(1),
-                        location: locationData
+                        location: locationData || null
                     });
 
                     // Start tracking this visit only if tab is visible
                     if (document.visibilityState === 'visible') {
                         isVisitActive = true;
                         const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
+                        console.log('Setting initial visit with location:', locationData);
                         await set(visitRef, {
                             userId: uniqueUserId,
                             timestamp: Date.now(),
                             active: true,
-                            location: locationData
+                            location: locationData || null
                         });
                     }
 
