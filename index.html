@@ -46,6 +46,30 @@
 
             // Current visit ID
             const currentVisitId = Date.now().toString(36);
+            let isVisitActive = false;
+
+            // Handle tab visibility changes
+            document.addEventListener('visibilitychange', async () => {
+                try {
+                    const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
+                    
+                    if (document.visibilityState === 'visible' && !isVisitActive) {
+                        // Tab became visible - start visit
+                        isVisitActive = true;
+                        await set(visitRef, {
+                            userId: uniqueUserId,
+                            timestamp: Date.now(),
+                            active: true
+                        });
+                    } else if (document.visibilityState === 'hidden' && isVisitActive) {
+                        // Tab hidden - end visit
+                        isVisitActive = false;
+                        await remove(visitRef);
+                    }
+                } catch (error) {
+                    console.error('Error handling visibility change:', error);
+                }
+            });
 
             async function trackUserActivity() {
                 try {
@@ -56,20 +80,26 @@
                         visits: increment(1)
                     });
 
-                    // Track this visit
-                    const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
-                    await set(visitRef, {
-                        userId: uniqueUserId,
-                        timestamp: Date.now(),
-                        active: true
-                    });
+                    // Start tracking this visit only if tab is visible
+                    if (document.visibilityState === 'visible') {
+                        isVisitActive = true;
+                        const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
+                        await set(visitRef, {
+                            userId: uniqueUserId,
+                            timestamp: Date.now(),
+                            active: true
+                        });
+                    }
 
                     // Cleanup visit when user leaves
                     window.addEventListener('beforeunload', async () => {
-                        try {
-                            await remove(visitRef);
-                        } catch (error) {
-                            console.error('Error cleaning up visit:', error);
+                        if (isVisitActive) {
+                            try {
+                                const visitRef = ref(database, `visits/${today}/${currentVisitId}`);
+                                await remove(visitRef);
+                            } catch (error) {
+                                console.error('Error cleaning up visit:', error);
+                            }
                         }
                     });
 
@@ -92,22 +122,22 @@
                         }
                     });
 
-                    // Listen for total visits
+                    // Listen for active visits
                     onValue(ref(database, `visits/${today}`), (snapshot) => {
                         const data = snapshot.val();
-                        const visitCount = data ? Object.keys(data).length : 0;
-                        console.log(`Total visits today: ${visitCount}`);
+                        const activeVisits = data ? Object.keys(data).length : 0;
+                        console.log(`Active visits: ${activeVisits}`);
                         
                         // Update analytics
-                        analytics.logEvent('total_visits', {
+                        analytics.logEvent('active_visits', {
                             date: today,
-                            count: visitCount
+                            count: activeVisits
                         });
 
                         // Update counter display if it exists
                         const visitCounterEl = document.getElementById('visitCounter');
                         if (visitCounterEl) {
-                            visitCounterEl.textContent = `Active Visits: ${visitCount}`;
+                            visitCounterEl.textContent = `Active Visits: ${activeVisits}`;
                         }
                     });
 
