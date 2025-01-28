@@ -2,6 +2,58 @@
 <html>
 <head>
     <title>Agroclimate Viewer & Planner App</title>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-analytics.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAIo80sL0dRdsI7wnBqWjG4s9gCM6eX6s8",
+            authDomain: "agroclimate-analytics.firebaseapp.com",
+            projectId: "agroclimate-analytics",
+            storageBucket: "agroclimate-analytics.firebasestorage.app",
+            messagingSenderId: "38181017178",
+            appId: "1:38181017178:web:581278e2d21d39873e7c4",
+            measurementId: "G-DRVWFWG1B3"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+
+        // Track page views
+        analytics.logEvent('page_view', {
+            page_title: document.title,
+            page_location: window.location.href
+        });
+
+        // Track user engagement
+        let sessionStartTime = Date.now();
+        
+        // Track session duration
+        setInterval(() => {
+            const sessionDuration = Math.floor((Date.now() - sessionStartTime) / 1000);
+            analytics.logEvent('user_engagement', {
+                engagement_time: sessionDuration,
+                type: 'user'
+            });
+        }, 60000); // Log every minute
+
+        // Track GEE app interactions
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'analytics') {
+                analytics.logEvent('gee_interaction', {
+                    action: event.data.action,
+                    category: event.data.category,
+                    label: event.data.label || ''
+                });
+            }
+        });
+    </script>
+
     <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-YLRKCN2672"></script>
     <script>
