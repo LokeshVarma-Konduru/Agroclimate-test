@@ -9,9 +9,12 @@
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
         
-        // Configure with custom parameter
+        // Configure GA4 with session settings
         gtag('config', 'G-YLRKCN2672', {
-            send_page_view: false  // Disable automatic page views
+            'session_duration': 1800,  // 30 minutes in seconds
+            'custom_map': {
+                'dimension1': 'user_type'
+            }
         });
 
         // Bot detection
@@ -19,40 +22,50 @@
             return /bot|googlebot|crawler|spider|robot|crawling/i.test(navigator.userAgent);
         }
 
-        // Custom event tracking function with user type parameter
+        // Set persistent user property
+        gtag('set', 'user_properties', {
+            'user_type': isBot() ? 'bot' : 'real_user'
+        });
+
+        // Custom event tracking function with session handling
         function trackEvent(action, category, label) {
+            console.log('Sending event:', action, {
+                event_category: category,
+                event_label: label,
+                user_type: isBot() ? 'bot' : 'real_user',
+                non_interaction: false  // Ensures event affects session duration
+            });
+
             gtag('event', action, {
                 event_category: category,
                 event_label: label,
                 user_type: isBot() ? 'bot' : 'real_user',
-                // Add location parameters if available
-                ...getLocationParameters()
+                non_interaction: false
             });
         }
 
-        // Function to get location parameters if available
-        function getLocationParameters() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    return {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    };
-                });
-            }
-            return {};
-        }
-
-        // Send initial page view with user type
+        // Track initial page view with session data
         gtag('event', 'page_view', {
             user_type: isBot() ? 'bot' : 'real_user',
             page_title: document.title,
-            page_location: window.location.href
+            page_location: window.location.href,
+            non_interaction: false
         });
+
+        // Periodic activity tracking to maintain session
+        setInterval(function() {
+            if (document.visibilityState === 'visible') {
+                gtag('event', 'active_check', {
+                    user_type: isBot() ? 'bot' : 'real_user',
+                    non_interaction: true
+                });
+            }
+        }, 60000);  // Check every minute
+
+        console.log('Analytics initialized with user_type:', isBot() ? 'bot' : 'real_user');
     </script>
 </head>
 <body style="margin:0; padding:0;">
-    <!-- Replace YOUR_APP_URL with your deployed GEE app URL -->
     <iframe id="geeApp" style="width:100%; height:100vh; border:none;"></iframe>
 
     <script>
@@ -63,17 +76,10 @@
             }
         });
 
-        // Load the GEE app
+        // Load the GEE app and track the load
         window.onload = function() {
-            // Track page view with user type
-            //gtag('event', 'page_view', {
-            //    'user_type': isBot() ? 'bot' : 'real_user'
-            //});
-            
-            // Get the iframe element
+            trackEvent('app_load', 'system', 'GEE App Loaded');
             var iframe = document.getElementById('geeApp');
-            
-            // Your GEE app URL
             iframe.src = 'https://our-axon-435300-d4.projects.earthengine.app/view/agroclimate-v1';
         };
     </script>
