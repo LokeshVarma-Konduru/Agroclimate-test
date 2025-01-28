@@ -8,14 +8,50 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', 'G-YLRKCN2672');
+        gtag('config', 'G-YLRKCN2672', {
+            'custom_map': {
+                'dimension1': 'user_type'
+            }
+        });
 
-        // Custom event tracking function
+        // Bot detection
+        function isBot() {
+            return /bot|googlebot|crawler|spider|robot|crawling/i.test(navigator.userAgent);
+        }
+
+        // Set user type
+        gtag('set', 'user_properties', {
+            'user_type': isBot() ? 'bot' : 'real_user'
+        });
+
+        // Custom event tracking function with location
         function trackEvent(action, category, label) {
-            gtag('event', action, {
-                'event_category': category,
-                'event_label': label
-            });
+            // Get more accurate location if available
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    gtag('event', action, {
+                        'event_category': category,
+                        'event_label': label,
+                        'user_type': isBot() ? 'bot' : 'real_user',
+                        'latitude': position.coords.latitude,
+                        'longitude': position.coords.longitude
+                    });
+                }, function(error) {
+                    // If geolocation fails, track without location
+                    gtag('event', action, {
+                        'event_category': category,
+                        'event_label': label,
+                        'user_type': isBot() ? 'bot' : 'real_user'
+                    });
+                });
+            } else {
+                // If geolocation not supported
+                gtag('event', action, {
+                    'event_category': category,
+                    'event_label': label,
+                    'user_type': isBot() ? 'bot' : 'real_user'
+                });
+            }
         }
     </script>
 </head>
@@ -33,13 +69,15 @@
 
         // Load the GEE app
         window.onload = function() {
-            // Track page view
-            gtag('event', 'page_view');
+            // Track page view with user type
+            gtag('event', 'page_view', {
+                'user_type': isBot() ? 'bot' : 'real_user'
+            });
             
             // Get the iframe element
             var iframe = document.getElementById('geeApp');
             
-            // Replace this URL with your actual GEE app URL after deployment
+            // Your GEE app URL
             iframe.src = 'https://our-axon-435300-d4.projects.earthengine.app/view/agroclimate-v1';
         };
     </script>
