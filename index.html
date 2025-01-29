@@ -18,19 +18,37 @@
             // Initialize FingerprintJS for unique user identification
             const fpPromise = FingerprintJS.load();
 
-            // Your web app's Firebase configuration
-            const firebaseConfig = {
-                apiKey: "AIzaSyAIo80sL0dRdsI7wnBqWjG4s9gCM6eX6s8",
-                authDomain: "agroclimate-analytics.firebaseapp.com",
-                projectId: "agroclimate-analytics",
-                storageBucket: "agroclimate-analytics.firebasestorage.app",
-                messagingSenderId: "38181017178",
-                appId: "1:38181017178:web:581278e2d21d39873e7c4",
-                measurementId: "G-DRVWFWG1B3",
-                databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com"
-            };
+            // Load Firebase configuration from environment variables or GitHub Pages config
+            async function loadFirebaseConfig() {
+                try {
+                    // First try to load from environment variables
+                    if (process.env) {
+                        return {
+                            apiKey: process.env.FIREBASE_API_KEY,
+                            authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+                            projectId: process.env.FIREBASE_PROJECT_ID,
+                            storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+                            messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+                            appId: process.env.FIREBASE_APP_ID,
+                            measurementId: process.env.FIREBASE_MEASUREMENT_ID,
+                            databaseURL: process.env.FIREBASE_DATABASE_URL
+                        };
+                    }
+                    
+                    // If running on GitHub Pages, load from config endpoint
+                    const response = await fetch('/config.json');
+                    if (!response.ok) {
+                        throw new Error('Failed to load config');
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error loading Firebase config:', error);
+                    throw error;
+                }
+            }
 
-            // Initialize Firebase
+            // Initialize Firebase with loaded config
+            const firebaseConfig = await loadFirebaseConfig();
             const app = initializeApp(firebaseConfig);
             const database = getDatabase(app);
             const analytics = getAnalytics(app);
