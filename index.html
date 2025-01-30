@@ -18,37 +18,19 @@
             // Initialize FingerprintJS for unique user identification
             const fpPromise = FingerprintJS.load();
 
-            // Load Firebase configuration from environment variables or GitHub Pages config
-            async function loadFirebaseConfig() {
-                try {
-                    // First try to load from environment variables
-                    if (process.env) {
-                        return {
-                            apiKey: 'AIzaSyAIo8OsL0dRdsI7wnBgWjG4s9qCM6eX6s0',
-                            authDomain: 'agroclimate-analytics.firebaseapp.com',
-                            projectId: 'agroclimate-analytics',
-                            storageBucket: 'agroclimate-analytics.firebasestorage.app',
-                            messagingSenderId: '38181017178',
-                            appId: '1:381810171789:web:581278e2d221d39873e7c4',
-                            measurementId: 'G-DRVWFWG1B3',
-                            databaseURL: 'https://agroclimate-analytics-default-rtdb.firebaseio.com'
-                        };
-                    }
-                    
-                    // If running on GitHub Pages, load from config endpoint
-                    const response = await fetch('/config.json');
-                    if (!response.ok) {
-                        throw new Error('Failed to load config');
-                    }
-                    return await response.json();
-                } catch (error) {
-                    console.error('Error loading Firebase config:', error);
-                    throw error;
-                }
-            }
+            // Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyAIo8OsL0dRdsI7wnBgWjG4s9qCM6eX6s0",
+                authDomain: "agroclimate-analytics.firebaseapp.com",
+                databaseURL: "https://agroclimate-analytics-default-rtdb.firebaseio.com",
+                projectId: "agroclimate-analytics",
+                storageBucket: "agroclimate-analytics.firebasestorage.app",
+                messagingSenderId: "381810171789",
+                appId: "1:381810171789:web:581278e2d221d39873e7c4",
+                measurementId: "G-DRVWFWG1B3"
+            };
 
-            // Initialize Firebase with loaded config
-            const firebaseConfig = await loadFirebaseConfig();
+            // Initialize Firebase with config
             const app = initializeApp(firebaseConfig);
             const database = getDatabase(app);
             const analytics = getAnalytics(app);
